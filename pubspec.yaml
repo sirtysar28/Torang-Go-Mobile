@@ -1,0 +1,32 @@
+name: torang_go
+description: "Torang Go — Ojek online Halmahera Barat. Aplikasi Customer & Driver."
+publish_to: "none"
+version: 1.0.0+1
+
+environment:
+  sdk: ^3.11.0
+
+dependencies:
+  flutter:
+    sdk: flutter
+  google_fonts: ^6.2.1
+  http: ^1.2.2
+  shared_preferences: ^2.3.2
+  intl: ^0.20.2
+  # Peta interaktif OpenStreetMap (tanpa API key) — Torang Ride/Bentor/Car/Kirim/Makan/Mart
+  flutter_map: ^8.2.1
+  latlong2: ^0.9.1
+  # Buka WhatsApp / telepon / Google Maps dari dalam app
+  url_launcher: ^6.3.2
+  # Ambil posisi GPS pengguna di peta
+  geolocator: ^14.0.2
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
+
+flutter:
+  uses-material-design: true
+  assets:
+    - assets/
