@@ -174,9 +174,19 @@ class _DriverOrdersScreenState extends State<DriverOrdersScreen>
             overflow: TextOverflow.ellipsis,
             style: TG.body(context, w: FontWeight.w600),
           ),
-          if (!o.isRide)
+          // Nama customer pemesan (tampil kalau tersedia dari server)
+          if (o.customerName != null)
             Text(
-              'Penerima: ${o.receiverName ?? '-'} (${o.receiverPhone ?? '-'})',
+              '👤 ${o.customerName}'
+              '${o.customerPhone != null ? ' • ${o.customerPhone}' : ''}',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TG.bodySm(context, color: TG.inkSoft, w: FontWeight.w600),
+            ),
+          // Detail penerima hanya untuk order kiriman yang datanya diisi
+          if (o.isSend && (o.receiverName?.trim().isNotEmpty ?? false))
+            Text(
+              'Penerima: ${o.receiverName} (${o.receiverPhone ?? '-'})',
               style: TG.bodySm(context, color: TG.inkSoft),
             ),
           if (o.itemsSummary != null && o.itemsSummary!.isNotEmpty)

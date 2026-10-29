@@ -34,7 +34,7 @@ class _NotificationsScreenState extends State<NotificationsScreen>
         _items = ((res['notifications'] as List?) ?? [])
             .map(
               (e) => TgNotification(
-                e['id'] as int,
+                int.tryParse(e['id']?.toString() ?? '') ?? 0,
                 (e['title'] ?? 'Notifikasi').toString(),
                 (e['body'] ?? '').toString(),
                 e['read_at']?.toString(),

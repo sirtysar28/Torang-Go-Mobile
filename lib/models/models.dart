@@ -2,6 +2,19 @@ import '../core/theme.dart';
 
 /// Model seluruh API Torang Go (bentuk JSON mengikuti Controller.php backend).
 
+/// Parser angka toleran — beberapa server/hosting (cPanel dll.) mengirim
+/// angka dari database sebagai STRING ("12", bukan 12). Dulu bikin crash
+/// "type 'String' is not a subtype of type 'int/num' in type cast" yang
+/// muncul sebagai teks error di app. Semua parser di bawah jadi kebal itu.
+int _asInt(dynamic v) =>
+    v is num ? v.toInt() : int.tryParse(v?.toString() ?? '') ?? 0;
+int? _asIntOrNull(dynamic v) =>
+    v is num ? v.toInt() : int.tryParse(v?.toString() ?? '');
+double _asDouble(dynamic v) =>
+    v is num ? v.toDouble() : double.tryParse(v?.toString() ?? '') ?? 0;
+double? _asDoubleOrNull(dynamic v) =>
+    v is num ? v.toDouble() : double.tryParse(v?.toString() ?? '');
+
 class User {
   final int id;
   final String name, phone;
@@ -23,7 +36,7 @@ class User {
   });
 
   factory User.fromJson(Map<String, dynamic> j) => User(
-    id: j['id'] as int,
+    id: _asInt(j['id']),
     name: (j['name'] ?? '').toString(),
     phone: (j['phone'] ?? '').toString(),
     email: j['email']?.toString(),
@@ -67,7 +80,7 @@ class DriverInfo {
   factory DriverInfo.fromJson(Map<String, dynamic> j) {
     final v = j['vehicle'];
     return DriverInfo(
-      id: j['id'] as int,
+      id: _asInt(j['id']),
       code: j['code']?.toString(),
       name: j['name']?.toString(),
       phone: j['phone']?.toString(),
@@ -78,10 +91,10 @@ class DriverInfo {
       vehicleLabel: v is Map ? v['label']?.toString() : null,
       plateNumber: v is Map ? v['plate_number']?.toString() : null,
       vehicleColor: v is Map ? v['color']?.toString() : null,
-      rating: (j['rating'] as num?)?.toDouble() ?? 5.0,
-      totalOrders: (j['total_orders'] as num?)?.toInt() ?? 0,
-      latitude: (j['latitude'] as num?)?.toDouble(),
-      longitude: (j['longitude'] as num?)?.toDouble(),
+      rating: _asDoubleOrNull(j['rating']) ?? 5.0,
+      totalOrders: _asIntOrNull(j['total_orders']) ?? 0,
+      latitude: _asDoubleOrNull(j['latitude']),
+      longitude: _asDoubleOrNull(j['longitude']),
     );
   }
 }
@@ -94,8 +107,8 @@ class OrderPoint {
 
   factory OrderPoint.fromJson(Map<String, dynamic> j) => OrderPoint(
     (j['name'] ?? '-').toString(),
-    (j['latitude'] as num?)?.toDouble() ?? 0,
-    (j['longitude'] as num?)?.toDouble() ?? 0,
+    _asDouble(j['latitude']),
+    _asDouble(j['longitude']),
     j['address']?.toString(),
   );
 }
@@ -177,6 +190,29 @@ class Order {
   String get serviceChip => serviceLabelId(serviceType);
   String get serviceTitle => serviceTitleId(serviceType);
 
+  /// Nama customer pemesan (dari relasi user di API).
+  /// Untuk layanan Kirim, fallback ke nama pengirim yang diisi customer.
+  String? get customerName {
+    final n = customer?['name']?.toString().trim();
+    if (n != null && n.isNotEmpty) return n;
+    if (isSend) {
+      final s = senderName?.trim();
+      if (s != null && s.isNotEmpty) return s;
+    }
+    return null;
+  }
+
+  /// No. HP customer pemesan (bisa langsung ditelepon / di-WA driver).
+  String? get customerPhone {
+    final p = customer?['phone']?.toString().trim();
+    if (p != null && p.isNotEmpty) return p;
+    if (isSend) {
+      final s = senderPhone?.trim();
+      if (s != null && s.isNotEmpty) return s;
+    }
+    return null;
+  }
+
   static const kActiveStatuses = [
     'pending',
     'searching_driver',
@@ -187,7 +223,7 @@ class Order {
   ];
 
   factory Order.fromJson(Map<String, dynamic> j) => Order(
-    id: j['id'] as int,
+    id: _asInt(j['id']),
     code: (j['code'] ?? '-').toString(),
     serviceType: (j['service_type'] ?? 'ride').toString(),
     status: (j['status'] ?? '-').toString(),
@@ -205,14 +241,14 @@ class Order {
         ? MerchantInfo.fromJson(j['merchant'])
         : null,
     notes: j['notes']?.toString(),
-    distanceKm: (j['distance_km'] as num?)?.toDouble() ?? 0,
-    durationMinutes: (j['duration_minutes'] as num?)?.toInt() ?? 0,
-    baseFare: (j['base_fare'] as num?)?.toDouble() ?? 0,
-    distanceFare: (j['distance_fare'] as num?)?.toDouble() ?? 0,
-    totalFare: (j['total_fare'] as num?)?.toDouble() ?? 0,
-    serviceFee: (j['service_fee'] as num?)?.toDouble(),
-    commissionAmount: (j['commission_amount'] as num?)?.toDouble() ?? 0,
-    driverEarning: (j['driver_earning'] as num?)?.toDouble() ?? 0,
+    distanceKm: _asDouble(j['distance_km']),
+    durationMinutes: _asInt(j['duration_minutes']),
+    baseFare: _asDouble(j['base_fare']),
+    distanceFare: _asDouble(j['distance_fare']),
+    totalFare: _asDouble(j['total_fare']),
+    serviceFee: _asDoubleOrNull(j['service_fee']),
+    commissionAmount: _asDouble(j['commission_amount']),
+    driverEarning: _asDouble(j['driver_earning']),
     paymentMethod: (j['payment_method'] ?? 'cash').toString(),
     paymentStatus: (j['payment_status'] ?? 'pending').toString(),
     cancelReason: j['cancel_reason']?.toString(),
@@ -231,8 +267,10 @@ class Order {
           ),
         )
         .toList(),
-    rated: j['rated'] as bool?,
-    driverDistanceKm: (j['driver_distance_km'] as num?)?.toDouble(),
+    rated: j['rated'] is bool
+        ? j['rated'] as bool
+        : (j['rated'] == 1 || j['rated'] == '1'),
+    driverDistanceKm: _asDoubleOrNull(j['driver_distance_km']),
   );
 }
 
@@ -243,10 +281,10 @@ class Zone {
   Zone(this.id, this.name, this.lat, this.lng);
 
   factory Zone.fromJson(Map<String, dynamic> j) => Zone(
-    j['id'] as int,
+    _asInt(j['id']),
     (j['name'] ?? '-').toString(),
-    (j['center_latitude'] as num?)?.toDouble(),
-    (j['center_longitude'] as num?)?.toDouble(),
+    _asDoubleOrNull(j['center_latitude']),
+    _asDoubleOrNull(j['center_longitude']),
   );
 }
 
@@ -258,12 +296,12 @@ class Place {
   Place(this.id, this.zoneId, this.name, this.address, this.lat, this.lng);
 
   factory Place.fromJson(Map<String, dynamic> j) => Place(
-    j['id'] as int,
-    j['zone_id'] as int?,
+    _asInt(j['id']),
+    _asIntOrNull(j['zone_id']),
     (j['name'] ?? '-').toString(),
     (j['address'] ?? '').toString(),
-    (j['latitude'] as num?)?.toDouble() ?? 0,
-    (j['longitude'] as num?)?.toDouble() ?? 0,
+    _asDouble(j['latitude']),
+    _asDouble(j['longitude']),
   );
 }
 
@@ -292,14 +330,14 @@ class FareEstimate {
     final zone = j['zone'];
     return FareEstimate(
       zoneName: zone is Map ? zone['name']?.toString() : null,
-      distanceKm: (j['distance_km'] as num?)?.toDouble() ?? 0,
-      durationMinutes: (j['duration_minutes'] as num?)?.toInt() ?? 0,
-      baseFare: (j['base_fare'] as num?)?.toDouble() ?? 0,
-      distanceFare: (j['distance_fare'] as num?)?.toDouble() ?? 0,
-      totalFare: (j['total_fare'] as num?)?.toDouble() ?? 0,
-      serviceFee: (j['service_fee'] as num?)?.toDouble(),
-      extraFee: (j['extra_fee'] as num?)?.toDouble(),
-      driversNearby: (j['drivers_nearby'] as num?)?.toInt() ?? 0,
+      distanceKm: _asDouble(j['distance_km']),
+      durationMinutes: _asInt(j['duration_minutes']),
+      baseFare: _asDouble(j['base_fare']),
+      distanceFare: _asDouble(j['distance_fare']),
+      totalFare: _asDouble(j['total_fare']),
+      serviceFee: _asDoubleOrNull(j['service_fee']),
+      extraFee: _asDoubleOrNull(j['extra_fee']),
+      driversNearby: _asInt(j['drivers_nearby']),
     );
   }
 }
@@ -332,20 +370,20 @@ class Merchant {
   });
 
   factory Merchant.fromJson(Map<String, dynamic> j) => Merchant(
-    id: j['id'] as int,
+    id: _asInt(j['id']),
     type: (j['type'] ?? 'restaurant').toString(),
     name: (j['name'] ?? '-').toString(),
     category: j['category']?.toString(),
     address: j['address']?.toString(),
     phone: j['phone']?.toString(),
-    lat: (j['latitude'] as num?)?.toDouble(),
-    lng: (j['longitude'] as num?)?.toDouble(),
-    priceMonthly: (j['price_monthly'] as num?)?.toDouble(),
+    lat: _asDoubleOrNull(j['latitude']),
+    lng: _asDoubleOrNull(j['longitude']),
+    priceMonthly: _asDoubleOrNull(j['price_monthly']),
     facilities: ((j['facilities'] as List?) ?? [])
         .map((e) => e.toString())
         .where((e) => e.trim().isNotEmpty)
         .toList(),
-    rating: (j['rating'] as num?)?.toDouble() ?? 5,
+    rating: _asDoubleOrNull(j['rating']) ?? 5,
   );
 }
 
@@ -357,7 +395,7 @@ class MerchantInfo {
   MerchantInfo(this.id, this.name, this.category, this.address, this.phone);
 
   factory MerchantInfo.fromJson(Map<String, dynamic> j) => MerchantInfo(
-    j['id'] as int,
+    _asInt(j['id']),
     (j['name'] ?? '-').toString(),
     j['category']?.toString(),
     j['address']?.toString(),
@@ -377,7 +415,7 @@ class BillProduct {
     (j['type'] ?? 'lain').toString(),
     (j['name'] ?? 'Tagihan').toString(),
     (j['customer_label'] ?? 'Nomor').toString(),
-    (j['admin_fee'] as num?)?.toDouble() ?? 0,
+    _asDouble(j['admin_fee']),
   );
 }
 
@@ -405,7 +443,7 @@ class BillPayment {
   });
 
   factory BillPayment.fromJson(Map<String, dynamic> j) => BillPayment(
-    id: j['id'] as int,
+    id: _asInt(j['id']),
     reference: (j['reference'] ?? '-').toString(),
     productType: (j['product_type'] ?? 'lain').toString(),
     productName: (j['product_name'] ?? 'Tagihan').toString(),
@@ -414,9 +452,9 @@ class BillPayment {
     statusLabel: j['status_label']?.toString(),
     note: j['note']?.toString(),
     createdAt: j['created_at']?.toString(),
-    amount: (j['amount'] as num?)?.toDouble() ?? 0,
-    adminFee: (j['admin_fee'] as num?)?.toDouble() ?? 0,
-    total: (j['total'] as num?)?.toDouble() ?? 0,
+    amount: _asDouble(j['amount']),
+    adminFee: _asDouble(j['admin_fee']),
+    total: _asDouble(j['total']),
     paymentMethod: (j['payment_method'] ?? 'cash').toString(),
   );
 }
@@ -442,6 +480,60 @@ class SupportSettings {
     botName: (j['bot_name'] ?? 'Tori').toString(),
     adminOnline: j['admin_online'] == true,
   );
+}
+
+// ============================================================
+// Feature flags — tampil/sembunyi layanan (diatur dari dashboard admin)
+// Default semua true = fallback aman kalau server belum punya
+// endpoint /features (semua menu tetap tampil seperti biasa).
+// ============================================================
+class AppFeatures {
+  final bool ride, bentor, car, send, food, mart, bayar, kos, help;
+
+  const AppFeatures({
+    this.ride = true,
+    this.bentor = true,
+    this.car = true,
+    this.send = true,
+    this.food = true,
+    this.mart = true,
+    this.bayar = true,
+    this.kos = true,
+    this.help = true,
+  });
+
+  /// Cache flag terakhir yang berhasil diambil dari server
+  /// (diisi HomeScreen tiap app dibuka / pull-to-refresh).
+  static AppFeatures cached = const AppFeatures();
+
+  /// `false` hanya kalau server eksplisit bilang false;
+  /// key hilang (backend lama) → dianggap aktif.
+  factory AppFeatures.fromJson(Map<String, dynamic> j) => AppFeatures(
+    ride: j['ride'] != false,
+    bentor: j['bentor'] != false,
+    car: j['car'] != false,
+    send: j['send'] != false,
+    food: j['food'] != false,
+    mart: j['mart'] != false,
+    bayar: j['bayar'] != false,
+    kos: j['kos'] != false,
+    help: j['help'] != false,
+  );
+
+  /// Cek flag berdasarkan route layanan
+  /// (ride/bentor/car/send/food/mart/bayar/kos/help).
+  bool of(String key) => switch (key) {
+    'ride' => ride,
+    'bentor' => bentor,
+    'car' => car,
+    'send' => send,
+    'food' => food,
+    'mart' => mart,
+    'bayar' => bayar,
+    'kos' => kos,
+    'help' => help,
+    _ => true,
+  };
 }
 
 class DriverSummary {

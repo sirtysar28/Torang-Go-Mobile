@@ -324,9 +324,18 @@ class _ProfileScreenState extends State<ProfileScreen>
             Icons.chat_bubble_rounded,
             'Bantuan torang',
             'Bot AI 24 jam + chat admin WhatsApp',
-            onTap: () => Navigator.of(
-              context,
-            ).push(MaterialPageRoute(builder: (_) => const HelpScreen())),
+            onTap: () {
+              if (!AppFeatures.cached.help) {
+                tgSnackbar(
+                  context,
+                  'Menu Bantuan sedang disembunyikan admin 🙏',
+                );
+                return;
+              }
+              Navigator.of(context).push(
+                MaterialPageRoute(builder: (_) => const HelpScreen()),
+              );
+            },
           ),
           const Divider(height: 1, indent: 60, color: TG.line),
           _menuItem(
@@ -336,15 +345,18 @@ class _ProfileScreenState extends State<ProfileScreen>
             onTap: _editProfile,
           ),
           const Divider(height: 1, indent: 60, color: TG.line),
-          _menuItem(
-            Icons.credit_card_rounded,
-            'Torang Bayar',
-            'Tagihan PLN, pulsa, PDAM, BPJS',
-            onTap: () {
-              tgSnackbar(context, 'Buka menu Torang Bayar di beranda ya 💳');
-            },
-          ),
-          const Divider(height: 1, indent: 60, color: TG.line),
+          // Menu Torang Bayar hanya tampil kalau layanan diaktifkan admin
+          if (AppFeatures.cached.bayar) ...[
+            _menuItem(
+              Icons.credit_card_rounded,
+              'Torang Bayar',
+              'Tagihan PLN, pulsa, PDAM, BPJS',
+              onTap: () {
+                tgSnackbar(context, 'Buka menu Torang Bayar di beranda ya 💳');
+              },
+            ),
+            const Divider(height: 1, indent: 60, color: TG.line),
+          ],
           _menuItem(
             Icons.handshake_rounded,
             'Jadi mitra driver',
@@ -441,7 +453,7 @@ class _ProfileScreenState extends State<ProfileScreen>
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'Torang Go v1.1.0',
+                  'Torang Go v1.2.1',
                   style: TG.body(context, w: FontWeight.w700),
                 ),
                 Text(

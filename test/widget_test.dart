@@ -54,6 +54,82 @@ void main() {
     expect(order.totalFare, 15000);
   });
 
+  // Regresi "nama customer": driver harus melihat nama & no. HP customer
+  // dari relasi user, bukan placeholder "- (-)".
+  test('Order: nama & HP customer tersedia untuk driver', () {
+    final order = Order.fromJson({
+      'id': 9,
+      'code': 'TG-0009',
+      'service_type': 'food',
+      'status': 'driver_assigned',
+      'pickup': {
+        'name': 'Warung Nasi Ikan',
+        'latitude': -0.67,
+        'longitude': 127.52,
+      },
+      'destination': {
+        'name': 'Mardika',
+        'latitude': -0.68,
+        'longitude': 127.53,
+      },
+      'customer': {'id': 3, 'name': 'Rifky Ansari', 'phone': '081234567890'},
+      'total_fare': 25000,
+    });
+
+    expect(order.customerName, 'Rifky Ansari');
+    expect(order.customerPhone, '081234567890');
+
+    // Order kirim tanpa relasi customer → fallback ke pengirim
+    final kirim = Order.fromJson({
+      'id': 10,
+      'code': 'TG-0010',
+      'service_type': 'send',
+      'status': 'searching_driver',
+      'pickup': {'name': 'A', 'latitude': -0.67, 'longitude': 127.52},
+      'destination': {'name': 'B', 'latitude': -0.68, 'longitude': 127.53},
+      'sender_name': 'Pengirim A',
+      'sender_phone': '089999999999',
+      'receiver_name': 'Penerima B',
+      'receiver_phone': '087777777777',
+      'item_type': 'Dokumen',
+      'total_fare': 15000,
+    });
+    expect(kirim.customerName, 'Pengirim A');
+    expect(kirim.customerPhone, '089999999999');
+  });
+
+  // Regresi "type 'String' is not a subtype of type 'int'": beberapa
+  // hosting mengirim angka dari database sebagai string — parser model
+  // harus tetap aman (tidak crash / layar error di app).
+  test('Order.fromJson toleran angka bertipe string (hosting PDO)', () {
+    final order = Order.fromJson({
+      'id': '11',
+      'code': 'TG-0011',
+      'service_type': 'ride',
+      'status': 'completed',
+      'pickup': {'name': 'A', 'latitude': '-0.676', 'longitude': '127.529'},
+      'destination': {'name': 'B', 'latitude': '-0.68', 'longitude': '127.53'},
+      'total_fare': '17500',
+      'distance_km': '3.2',
+      'duration_minutes': '12',
+      'rated': 1,
+      'driver': {
+        'id': '2',
+        'name': 'Driver B',
+        'rating': '4.8',
+        'total_orders': '21',
+      },
+    });
+
+    expect(order.id, 11);
+    expect(order.totalFare, 17500);
+    expect(order.distanceKm, 3.2);
+    expect(order.durationMinutes, 12);
+    expect(order.rated, isTrue);
+    expect(order.driver?.rating, 4.8);
+    expect(order.driver?.totalOrders, 21);
+  });
+
   test('tema berisi warna brand Torang Go', () {
     expect(TG.ocean, const Color(0xFF1477E6));
     expect(TG.leaf, const Color(0xFF2FAE4E));

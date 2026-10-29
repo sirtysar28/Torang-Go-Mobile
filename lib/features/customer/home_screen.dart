@@ -22,10 +22,15 @@ class _HomeScreenState extends State<HomeScreen> {
   Order? _active;
   bool _loadingActive = true;
 
+  /// Layanan yang tampil di beranda — diatur admin dari dashboard
+  /// (GET /features). Fallback: semua tampil.
+  AppFeatures _features = AppFeatures.cached;
+
   @override
   void initState() {
     super.initState();
     _loadActive();
+    _loadFeatures();
   }
 
   Future<void> _loadActive() async {
@@ -40,6 +45,30 @@ class _HomeScreenState extends State<HomeScreen> {
     } catch (_) {
       if (mounted) setState(() => _loadingActive = false);
     }
+  }
+
+  Future<void> _loadFeatures() async {
+    try {
+      final res = await ApiClient.I.get('/features');
+      final j = res['features'];
+      if (mounted && j is Map) {
+        setState(
+          () => _features =
+              AppFeatures.cached =
+                  AppFeatures.fromJson(Map<String, dynamic>.from(j)),
+        );
+      }
+    } catch (_) {
+      // Server belum update / offline → pakai cache (semua tampil)
+    }
+  }
+
+  /// Layanan transport pertama yang aktif (untuk search bar beranda).
+  String? _firstTransport() {
+    for (final r in const ['bentor', 'ride', 'car', 'send']) {
+      if (_features.of(r)) return r;
+    }
+    return null;
   }
 
   String _greeting() {
@@ -58,16 +87,20 @@ class _HomeScreenState extends State<HomeScreen> {
         bottom: false,
         child: RefreshIndicator(
           color: TG.ocean,
-          onRefresh: _loadActive,
+          onRefresh: () async {
+            await _loadActive();
+            await _loadFeatures();
+          },
           child: ListView(
             padding: const EdgeInsets.only(bottom: 26),
             physics: const AlwaysScrollableScrollPhysics(),
             children: [
               _header(user?.name ?? 'Torang', address: user?.address),
-              const _SearchBar(),
+              // Search bar hanya tampil kalau ada layanan transport aktif
+              if (_firstTransport() case final t?) _SearchBar(serviceType: t),
               const _WalletCard(),
               _services(),
-              const _PromoCarousel(),
+              _PromoCarousel(features: _features),
               _activeOrderSection(),
             ],
           ),
@@ -156,7 +189,8 @@ class _HomeScreenState extends State<HomeScreen> {
   // ---------------- Services ----------------
   Widget _services() {
     // route: ride/bentor/car/send/food/mart → BookingScreen,
-    // bayar → BillsScreen, kos → KosScreen, help → HelpScreen
+    // bayar → BillsScreen, kos → KosScreen, help → HelpScreen.
+    // Menu yang dinonaktifkan admin (dashboard) otomatis disembunyikan.
     final items = const [
       ('Torang Bentor', '🛺', TG.leafDeep, TG.leafSoft, 'bentor'),
       ('Torang Ride', '🛵', TG.ocean, TG.oceanSoft, 'ride'),
@@ -168,6 +202,10 @@ class _HomeScreenState extends State<HomeScreen> {
       ('Sewa Kos', '🏠', TG.coral, TG.coralSoft, 'kos'),
       ('Bantuan', '💬', TG.leaf, TG.leafSoft, 'help'),
     ];
+    final visible = items
+        .where((it) => _features.of(it.$5))
+        .toList();
+    if (visible.isEmpty) return const SizedBox.shrink();
 
     return Padding(
       padding: const EdgeInsets.fromLTRB(22, 6, 22, 0),
@@ -186,7 +224,7 @@ class _HomeScreenState extends State<HomeScreen> {
             childAspectRatio: 0.86,
             mainAxisSpacing: 14,
             children: [
-              for (final (name, emoji, fg, bg, route) in items)
+              for (final (name, emoji, fg, bg, route) in visible)
                 _ServiceTile(
                   emoji: emoji,
                   label: name,
@@ -313,7 +351,10 @@ class _HomeScreenState extends State<HomeScreen> {
 // Search bar
 // ============================================================
 class _SearchBar extends StatelessWidget {
-  const _SearchBar();
+  const _SearchBar({required this.serviceType});
+
+  /// Layanan transport aktif pertama (dipakai tombol Pesan)
+  final String serviceType;
 
   @override
   Widget build(BuildContext context) {
@@ -322,7 +363,7 @@ class _SearchBar extends StatelessWidget {
       child: GestureDetector(
         onTap: () => Navigator.of(context).push(
           MaterialPageRoute(
-            builder: (_) => const BookingScreen(serviceType: 'ride'),
+            builder: (_) => BookingScreen(serviceType: serviceType),
           ),
         ),
         child: Container(
@@ -524,10 +565,12 @@ class _ServiceTile extends StatelessWidget {
 }
 
 // ============================================================
-// Promo carousel
+// Promo carousel (promo layanan yang dinonaktifkan ikut disembunyikan)
 // ============================================================
 class _PromoCarousel extends StatefulWidget {
-  const _PromoCarousel();
+  const _PromoCarousel({required this.features});
+
+  final AppFeatures features;
 
   @override
   State<_PromoCarousel> createState() => _PromoCarouselState();
@@ -537,20 +580,27 @@ class _PromoCarouselState extends State<_PromoCarousel> {
   final _controller = PageController(viewportFraction: 0.88);
   int _page = 0;
 
+  // (kicker, judul, kode, utama?, layanan terkait)
   static const _promos = [
     (
       'KHUSUS JAILOLO',
       'Diskon 30% antar-jemput Pelabuhan Jailolo',
       'Pakai kode TORANGJAILOLO',
       true,
+      ['ride', 'bentor', 'car'],
     ),
     (
       'TORANG KIRIM',
       'Gratis ongkir kirim paket se-Halmahera Barat',
       'Min. transaksi Rp 15.000',
       false,
+      ['send'],
     ),
   ];
+
+  List<(String, String, String, bool, List<String>)> get _visible => _promos
+      .where((p) => p.$5.any(widget.features.of))
+      .toList();
 
   @override
   void dispose() {
@@ -560,6 +610,9 @@ class _PromoCarouselState extends State<_PromoCarousel> {
 
   @override
   Widget build(BuildContext context) {
+    final promos = _visible;
+    if (promos.isEmpty) return const SizedBox.shrink();
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -571,10 +624,10 @@ class _PromoCarouselState extends State<_PromoCarousel> {
           height: 150,
           child: PageView.builder(
             controller: _controller,
-            itemCount: _promos.length,
+            itemCount: promos.length,
             onPageChanged: (i) => setState(() => _page = i),
             itemBuilder: (_, i) {
-              final (kicker, title, code, main) = _promos[i];
+              final (kicker, title, code, main, _) = promos[i];
               return Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 6),
                 child: Container(
@@ -642,7 +695,7 @@ class _PromoCarouselState extends State<_PromoCarousel> {
         const SizedBox(height: 12),
         Row(
           mainAxisAlignment: MainAxisAlignment.center,
-          children: List.generate(_promos.length, (i) {
+          children: List.generate(promos.length, (i) {
             final on = i == _page;
             return AnimatedContainer(
               duration: const Duration(milliseconds: 250),

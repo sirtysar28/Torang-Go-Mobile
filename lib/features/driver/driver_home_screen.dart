@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import '../../core/api_client.dart';
 import '../../core/app_config.dart';
 import '../../core/format.dart';
+import '../../core/launcher.dart';
 import '../../core/theme.dart';
 import '../../models/models.dart';
 import '../../shared/widgets.dart';
@@ -430,6 +431,16 @@ class _DriverHomeScreenState extends State<DriverHomeScreen>
           _route('Jemput', o.pickup.name, TG.ocean),
           const SizedBox(height: 6),
           _route('Tujuan', o.destination.name, const Color(0xFFB3261E)),
+          if (o.customerName != null) ...[
+            const SizedBox(height: 8),
+            Text(
+              '👤 Customer: ${o.customerName}'
+              '${o.customerPhone != null ? ' • ${o.customerPhone}' : ''}',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TG.bodySm(context, color: TG.ink, w: FontWeight.w600),
+            ),
+          ],
           const Divider(height: 20, color: TG.line),
           Row(
             children: [
@@ -501,6 +512,80 @@ class _DriverHomeScreenState extends State<DriverHomeScreen>
     );
   }
 
+  // ---------- Kartu customer: nama asli + telepon + chat WA ----------
+  Widget _customerCard(Order o) {
+    final name = o.customerName;
+    final phone = o.customerPhone;
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: TG.navySoft,
+        borderRadius: BorderRadius.circular(14),
+      ),
+      child: Row(
+        children: [
+          InitialAvatar(name ?? 'C', size: 40),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  name ?? 'Customer Torang Go',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TG.titleSm(context),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  phone ?? 'Nomor belum tersedia',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TG.bodySm(context, color: TG.inkSoft),
+                ),
+              ],
+            ),
+          ),
+          if (phone != null && phone.isNotEmpty) ...[
+            const SizedBox(width: 8),
+            _miniAction(Icons.phone_in_talk_rounded, TG.leafDeep, () async {
+              final ok = await TgLauncher.call(phone);
+              if (!ok && mounted) {
+                tgSnackbar(context, 'Tidak bisa membuka aplikasi telepon.', error: true);
+              }
+            }),
+            const SizedBox(width: 8),
+            _miniAction(Icons.chat_rounded, const Color(0xFF25D366), () async {
+              final ok = await TgLauncher.openWhatsApp(
+                phone,
+                message:
+                    'Halo ${name ?? 'Kak'}! Saya driver Torang Go untuk order ${o.code} 🛵',
+              );
+              if (!ok && mounted) {
+                tgSnackbar(context, 'Chat WA belum tersedia di HP kamu.', error: true);
+              }
+            }),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _miniAction(IconData icon, Color color, VoidCallback onTap) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        width: 38,
+        height: 38,
+        decoration: BoxDecoration(
+          color: color.withValues(alpha: 0.12),
+          shape: BoxShape.circle,
+        ),
+        child: Icon(icon, color: color, size: 19),
+      ),
+    );
+  }
+
   // ---------- Perjalanan aktif ----------
   Widget _activeTrip(Order o) {
     return Padding(
@@ -528,10 +613,15 @@ class _DriverHomeScreenState extends State<DriverHomeScreen>
             _route('Jemput', o.pickup.name, TG.ocean),
             const SizedBox(height: 6),
             _route('Tujuan', o.destination.name, const Color(0xFFB3261E)),
-            if (!o.isRide) ...[
-              const SizedBox(height: 10),
+            const SizedBox(height: 10),
+            _customerCard(o),
+            // Detail pengirim/penerima HANYA untuk order kiriman yang datanya
+            // diisi — jangan tampilkan placeholder "- (-)" di layar driver.
+            if (o.isSend && (o.receiverName?.trim().isNotEmpty ?? false)) ...[
+              const SizedBox(height: 8),
               Text(
-                'Pengirim: ${o.senderName ?? '-'} (${o.senderPhone ?? '-'})\nPenerima: ${o.receiverName ?? '-'} (${o.receiverPhone ?? '-'}) • ${o.itemType ?? ''}',
+                'Penerima: ${o.receiverName} (${o.receiverPhone ?? '-'})'
+                '${o.itemType != null && o.itemType!.trim().isNotEmpty ? ' • ${o.itemType}' : ''}',
                 style: TG.bodySm(context, color: TG.inkSoft),
               ),
             ],
